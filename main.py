@@ -1,3 +1,4 @@
+from enum import Enum
 import numpy as np
 from numpy import cosh, sinh, exp
 import matplotlib.pyplot as plt
@@ -38,6 +39,12 @@ MAX_BETA = 4*CURRENT_D  # how far the beta slider should go
 
 # What's the intuition behind this choice? Maybe I want every vertex updated every second on average or something?
 INTERVAL = 1 # 1000 / GRID**2
+
+class GraphGeometry(Enum):
+    COMPLETE = 1
+    LATTICE = 2
+
+CURRENT_GRAPH = GraphGeometry.COMPLETE
 
 ####################
 # HELPER FUNCTIONS #
@@ -122,6 +129,14 @@ def get_prop_update(spin):
 
     return res
 
+def get_spin_vector(spin):
+    """
+    Convertes a spin (represented by an integer) to the corresponding np vector
+    """
+    index = abs(spin)-1
+    return np.eye(1, MAX_D, index) * np.sign(spin)
+
+
 ##############
 # SIMULATION #
 ##############
@@ -139,7 +154,7 @@ def g(i, mag, d):
 
     return numerator / denominator
 
-def sample_new_spin(current_spin, current_prop, d):
+def sample_new_spin_complete(current_spin, current_prop, d):
 
     # remove the current spin from the magnetisation
     adj_prop = current_prop - get_prop_update(current_spin) 
@@ -172,6 +187,43 @@ def sample_new_spin(current_spin, current_prop, d):
 
     return get_spin(res)
 
+def sample_new_spin_lattice(vertex, state, d):
+    """
+    Sample a new spin according to the conditional face-cubic measure on the square lattice. Does periodic boundary conditions by treating opposite edges as adjacent.
+
+    vertex is a tuple containing the coordinates of the vertex to be updated
+    """
+    # compute adjacent magnetisation
+    left_i = (vertex[0] - 1 % GRID, vertex[1] % GRID) 
+    right_i = (vertex[0] + 1 % GRID, vertex[1] % GRID) 
+    top_i = (vertex[0]  % GRID, vertex[1] + 1 % GRID) 
+    bottom_i = (vertex[0]  % GRID, vertex[1] - 1 % GRID) 
+
+    left = get_spin_vector(state[left_i])
+    right = get_spin_vector(state[right_i])
+    top = get_spin_vector(state[top_i])
+    bottom = get_spin_vector(state[bottom_i])
+
+    adj_mag = left + right + top + bottom
+
+    # compute transition probabilities
+    # only compute spins that we are currently using
+    positive_spin_probs = [g(i, adj_mag, d) if i <= CURRENT_D else 0 for i in range(1, MAX_D+1)]
+    negative_spin_probs = [g(-i, adj_mag, d) if i <= CURRENT_D else 0 for i in range(1, MAX_D+1)]
+
+    conditional_measure = positive_spin_probs + negative_spin_probs
+
+    # sample via unif(0,1) noise
+    unif = np.random.uniform(0,1)
+    # choose the largest index where the cdf is still bigger than the noise
+    below = filter( 
+        lambda i : unif <= cdf[i],
+        list(range(2*MAX_D))
+    )
+    res = min(list(below))
+
+    return get_spin(res)
+    return
 
 ###################
 #      PLOTS      #
@@ -214,7 +266,16 @@ freq_slider.on_changed(update_slider)
 def update(frame):
     # perform a Glauber update
     v = select_vertex()
-    new_spin = sample_new_spin(current_spin=state[v], current_prop=proportions_from_state_unormalised(state), d=CURRENT_D)
+    
+    if CURRENT_GRAPH == GraphGeometry.COMPLETE:
+        new_spin = sample_new_spin_complete(
+            current_spin=state[v], 
+            current_prop=proportions_from_state_unormalised(state), 
+            d=CURRENT_D
+        ) 
+    elif CURRENT_GRAPH == GraphGeometry.LATTICE:
+        pass
+        # TODO
     state[v] = new_spin
 
     print(f"β =  {BETA},  d = {CURRENT_D}", end='\r')
