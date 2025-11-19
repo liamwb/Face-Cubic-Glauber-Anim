@@ -1,10 +1,22 @@
-{ pkgs ? import (fetchTarball "https://github.com/NixOS/nixpkgs/tarball/nixos-24.11") {} }:
+{ pkgs ? import (fetchTarball "https://github.com/NixOS/nixpkgs/tarball/nixos-24.11") {} }: let
+  libraryPath = with pkgs;
+    lib.makeLibraryPath [
+      # add other library packages here if needed
+      stdenv.cc.cc
+      stdenv.cc.libc
+      glibc_multi
+    ];
+in
 
 pkgs.mkShellNoCC {
   packages = with pkgs; [
     python3Packages.numpy
     python3Packages.matplotlib
+    python3Packages.debugpy
   ];
-  shellHook = "fish";
+  shellHook = ''
+    # export "LD_LIBRARY_PATH=$LD_LIBRARY_PATH:${libraryPath}"
+    fish
+  '';
 }
 
