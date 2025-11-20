@@ -29,7 +29,7 @@ import matplotlib.animation as animation
 ###################
 #    CONSTANTS    #
 ###################
-GRID = 32
+GRID = 25
 TOTAL_SPINS = GRID**2
 
 CURRENT_D = 2  # single source of truth 
@@ -253,7 +253,8 @@ grid = ax.imshow(
     state, 
     origin='lower', 
     cmap=cmap_simple,
-    norm=boundary_norm
+    norm=boundary_norm,
+    animated=True
     
 )
 # I don't want ticks
@@ -273,7 +274,7 @@ def update_slider(val):
 # Connect the frequency slider to the update function
 freq_slider.on_changed(update_slider)
 
-def update(frame):
+def update(frame, *fargs):
     # perform a Glauber update
     v = select_vertex()
     
@@ -293,7 +294,12 @@ def update(frame):
 
     print(f"β =  {BETA},  d = {CURRENT_D}", end='\r')
 
-    grid.set(data = state)
+    grid.set_data(state)
+
+    # if frame >= 1000:
+    #     exit()
+
+    return fargs  # pass the artists back for blitting
 
 ani = animation.FuncAnimation(
     fig, 
@@ -301,6 +307,7 @@ ani = animation.FuncAnimation(
     frames=None,
     interval=INTERVAL,
     cache_frame_data=False,  # I just want to show this animation in a window, not save it
+    blit=True  # this does not appear to do much
 )
 
 plt.show()
