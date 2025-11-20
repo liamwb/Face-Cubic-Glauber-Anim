@@ -32,7 +32,7 @@ import matplotlib.animation as animation
 GRID = 32
 TOTAL_SPINS = GRID**2
 
-CURRENT_D = 2  # this will be a single source of truth for everything
+CURRENT_D = 2  # single source of truth 
 BETA = 1
 MAX_D = 5  # I'm not sure how insightful going much higher than 4 is, and I'm not sure I could display the spins in a visually sensible way
 MAX_BETA = 4*CURRENT_D  # how far the beta slider should go
@@ -44,7 +44,7 @@ class GraphGeometry(Enum):
     COMPLETE = 1
     LATTICE = 2
 
-CURRENT_GRAPH = GraphGeometry.COMPLETE
+CURRENT_GRAPH = GraphGeometry.LATTICE
 
 ####################
 # HELPER FUNCTIONS #
@@ -134,7 +134,9 @@ def get_spin_vector(spin):
     Convertes a spin (represented by an integer) to the corresponding np vector
     """
     index = abs(spin)-1
-    return np.eye(1, MAX_D, index) * np.sign(spin)
+    res = np.zeros(MAX_D)
+    res[index] = np.sign(spin)
+    return res
 
 
 ##############
@@ -193,11 +195,11 @@ def sample_new_spin_lattice(vertex, state, d):
 
     vertex is a tuple containing the coordinates of the vertex to be updated
     """
-    # compute adjacent magnetisation
-    left_i = (vertex[0] - 1 % GRID, vertex[1] % GRID) 
-    right_i = (vertex[0] + 1 % GRID, vertex[1] % GRID) 
-    top_i = (vertex[0]  % GRID, vertex[1] + 1 % GRID) 
-    bottom_i = (vertex[0]  % GRID, vertex[1] - 1 % GRID) 
+    # compute adjacent magnetisation  (% ==> periodic)
+    left_i = ((vertex[0] - 1) % GRID, vertex[1] % GRID) 
+    right_i = ((vertex[0] + 1) % GRID, vertex[1] % GRID) 
+    top_i = (vertex[0]  % GRID, (vertex[1] + 1) % GRID) 
+    bottom_i = (vertex[0]  % GRID, (vertex[1] - 1) % GRID) 
 
     left = get_spin_vector(state[left_i])
     right = get_spin_vector(state[right_i])
@@ -213,6 +215,15 @@ def sample_new_spin_lattice(vertex, state, d):
 
     conditional_measure = positive_spin_probs + negative_spin_probs
 
+    # construct cdf
+    cdf = [0 for _ in conditional_measure]
+    cdf[0] = conditional_measure[0]
+    for i in range(1, len(cdf)):
+        cdf[i] = cdf[i-1] + conditional_measure[i]
+    # zero out the un-used spins (this feels inefficient)
+    for i in range(len(cdf)):
+        if abs(get_spin(i)) > CURRENT_D: cdf[i] = 0
+
     # sample via unif(0,1) noise
     unif = np.random.uniform(0,1)
     # choose the largest index where the cdf is still bigger than the noise
@@ -223,7 +234,6 @@ def sample_new_spin_lattice(vertex, state, d):
     res = min(list(below))
 
     return get_spin(res)
-    return
 
 ###################
 #      PLOTS      #
@@ -274,8 +284,11 @@ def update(frame):
             d=CURRENT_D
         ) 
     elif CURRENT_GRAPH == GraphGeometry.LATTICE:
-        pass
-        # TODO
+        new_spin = sample_new_spin_lattice(
+            vertex=v, 
+            state=state, 
+            d=CURRENT_D
+        )
     state[v] = new_spin
 
     print(f"β =  {BETA},  d = {CURRENT_D}", end='\r')
