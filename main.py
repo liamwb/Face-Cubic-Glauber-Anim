@@ -29,10 +29,10 @@ import matplotlib.animation as animation
 ###################
 #    CONSTANTS    #
 ###################
-GRID = 25
+GRID = 64
 TOTAL_SPINS = GRID**2
 
-CURRENT_D = 2  # single source of truth 
+CURRENT_D = 3  # single source of truth 
 BETA = 1
 MAX_D = 5  # I'm not sure how insightful going much higher than 4 is, and I'm not sure I could display the spins in a visually sensible way
 MAX_BETA = 4*CURRENT_D  # how far the beta slider should go
@@ -206,7 +206,7 @@ def sample_new_spin_lattice(vertex, state, d):
     top = get_spin_vector(state[top_i])
     bottom = get_spin_vector(state[bottom_i])
 
-    adj_mag = left + right + top + bottom
+    adj_mag = left + right + top + bottom 
 
     # compute transition probabilities
     # only compute spins that we are currently using
