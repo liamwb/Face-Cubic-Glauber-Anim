@@ -239,8 +239,10 @@ def sample_new_spin_lattice(vertex, state, d):
 #      PLOTS      #
 ###################
 
-# Create a figure and axis
-fig, ax = plt.subplots()
+# Create a figure, axes
+fig = plt.figure()
+grid_ax = fig.add_subplot(1,2,1)
+slider_ax = fig.add_subplot(1,2,2)
 
 plt.style.use('_mpl-gallery-nogrid')
 
@@ -249,7 +251,7 @@ state = [[unif_ising() for _ in range(GRID)] for _ in range(GRID)]
 state = np.array(state)
 
 # plot grid
-grid = ax.imshow(
+grid = grid_ax.imshow(
     state, 
     origin='lower', 
     cmap=cmap_simple,
@@ -258,12 +260,11 @@ grid = ax.imshow(
     
 )
 # I don't want ticks
-ax.set_xticks([])
-ax.set_yticks([])
+grid_ax.set_xticks([])
+grid_ax.set_yticks([])
 
 # Create a slider for temperature
-ax_freq_slider = plt.axes([.9,.1,.01,.8])
-freq_slider = Slider(ax_freq_slider, '$\\beta$', 0.0, 10.0, valinit=1, orientation='vertical')
+freq_slider = Slider(slider_ax, '$\\beta$', 0.0, 10.0, valinit=0, orientation='vertical')
 
 # Update function for temperature
 def update_slider(val):
@@ -277,20 +278,23 @@ freq_slider.on_changed(update_slider)
 def update(frame, *fargs):
     # perform a Glauber update
     v = select_vertex()
+
+    for _ in range(100):
     
-    if CURRENT_GRAPH == GraphGeometry.COMPLETE:
-        new_spin = sample_new_spin_complete(
-            current_spin=state[v], 
-            current_prop=proportions_from_state_unormalised(state), 
-            d=CURRENT_D
-        ) 
-    elif CURRENT_GRAPH == GraphGeometry.LATTICE:
-        new_spin = sample_new_spin_lattice(
-            vertex=v, 
-            state=state, 
-            d=CURRENT_D
-        )
-    state[v] = new_spin
+        if CURRENT_GRAPH == GraphGeometry.COMPLETE:
+            new_spin = sample_new_spin_complete(
+                current_spin=state[v], 
+                current_prop=proportions_from_state_unormalised(state), 
+                d=CURRENT_D
+            ) 
+        elif CURRENT_GRAPH == GraphGeometry.LATTICE:
+            new_spin = sample_new_spin_lattice(
+                vertex=v, 
+                state=state, 
+                d=CURRENT_D
+            )
+
+        state[v] = new_spin
 
     print(f"β =  {BETA},  d = {CURRENT_D}", end='\r')
 
