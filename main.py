@@ -8,6 +8,7 @@ from matplotlib.patches import Rectangle
 import matplotlib.animation as animation
 import matplotlib.cm as cm
 
+import time
 
 #  THE VISION:
 #
@@ -34,7 +35,7 @@ import matplotlib.cm as cm
 GRID = 256
 TOTAL_SPINS = GRID**2
 
-CURRENT_D = 1  # single source of truth 
+CURRENT_D = 3  # single source of truth 
 BETA = 1
 MAX_D = 5  # I'm not sure how insightful going much higher than 4 is, and I'm not sure I could display the spins in a visually sensible way
 MAX_BETA = 4*CURRENT_D  # how far the beta slider should go
@@ -245,9 +246,7 @@ def sample_new_spin_lattice(vertex, state, d):
 ###################
 
 # Create a figure, axes
-fig = plt.figure()
-grid_ax = fig.add_subplot(1,2,1)
-slider_ax = fig.add_subplot(1,2,2)
+fig, ax = plt.subplots()
 
 plt.style.use('_mpl-gallery-nogrid')
 
@@ -256,7 +255,7 @@ state = [[unif_spin() for _ in range(GRID)] for _ in range(GRID)]
 state = np.array(state)
 
 # plot grid
-grid = grid_ax.imshow(
+grid = ax.imshow(
     state, 
     origin='lower', 
     cmap=cmap_simple,
@@ -283,27 +282,49 @@ legend_elements = [
 legend_labels = [
     '$e_1$', '$-e_1$', '$e_2$', '$-e_2$', '$e_3$', '$-e_3$', '$e_4$', '$-e_4$', '$e_5$', '$-e_5$', 
 ][:2*CURRENT_D]
-grid_ax.legend(legend_elements, legend_labels, loc='upper left')
+ax.legend(legend_elements, legend_labels, loc='upper left')
 
 # I don't want ticks
-grid_ax.set_xticks([])
-grid_ax.set_yticks([])
+ax.set_xticks([])
+ax.set_yticks([])
 
-# Create a slider for temperature
-freq_slider = Slider(slider_ax, '$\\beta$', 0.0, 10.0, valinit=0, orientation='vertical')
+# adjust the main plot to make room for the sliders
+# fig.subplots_adjust(right=0.75, bottom=0.25)
+fig.tight_layout()
+
+# Create a slider for temperature (horizontal)
+beta_ax = fig.add_axes([0.25,0.1,0.65,0.03])
+beta_slider = Slider(
+    ax=beta_ax, 
+    label='$\\beta$', 
+    valmin=0.0, 
+    valmax=10.0, 
+    valinit=0, 
+    orientation='horizontal')
+
+# Create a slider for temperature (horizontal)
+d_ax = fig.add_axes([0.1,0.25,0.0225,0.63])
+d_slider = Slider(
+    ax=d_ax, 
+    label='$d$', 
+    valmin=1, 
+    valmax=5, 
+    valinit=1, 
+    orientation='vertical')
 
 # Update function for temperature
-def update_slider(val):
+def update_beta(val):
     global BETA
     BETA = val
     fig.canvas.draw_idle()
 #
 # Connect the frequency slider to the update function
-freq_slider.on_changed(update_slider)
+beta_slider.on_changed(update_beta)
 
 def update(frame, *fargs):
 
     for _ in range(500):
+        t1 = time.perf_counter()
         # perform a Glauber update
         v = select_vertex()
 
@@ -322,11 +343,14 @@ def update(frame, *fargs):
 
         state[v] = new_spin
 
-    print(f"β =  {BETA},  d = {CURRENT_D}", end='\r')
+    # print(f"β =  {BETA},  d = {CURRENT_D}", end='\r')
+    t2 = time.perf_counter()
+
+    print(f"Frametime: {(t2-t1)*1000}ms", end='\r')
 
     grid.set_data(state)
 
-    # if frame >= 1000:
+    # if frame >= 5:
     #     exit()
 
     return fargs  # pass the artists back for blitting
