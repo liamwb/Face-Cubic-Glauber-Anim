@@ -4,7 +4,9 @@ from numpy import cosh, sinh, exp
 import matplotlib.pyplot as plt
 from matplotlib.widgets import Slider
 from matplotlib.colors import ListedColormap, BoundaryNorm
+from matplotlib.patches import Rectangle
 import matplotlib.animation as animation
+import matplotlib.cm as cm
 
 
 #  THE VISION:
@@ -29,16 +31,16 @@ import matplotlib.animation as animation
 ###################
 #    CONSTANTS    #
 ###################
-GRID = 64
+GRID = 256
 TOTAL_SPINS = GRID**2
 
-CURRENT_D = 3  # single source of truth 
+CURRENT_D = 1  # single source of truth 
 BETA = 1
 MAX_D = 5  # I'm not sure how insightful going much higher than 4 is, and I'm not sure I could display the spins in a visually sensible way
 MAX_BETA = 4*CURRENT_D  # how far the beta slider should go
 
-# What's the intuition behind this choice? Maybe I want every vertex updated every second on average or something?
-INTERVAL = 1 # 1000 / GRID**2
+# 30 fps
+INTERVAL = 33.33 
 
 class GraphGeometry(Enum):
     COMPLETE = 1
@@ -72,6 +74,9 @@ boundary_norm = BoundaryNorm(boundaries, cmap_simple.N)
 
 def unif_ising():
     return np.random.choice([-1,1])
+
+def unif_spin():
+    return np.random.choice([-1,1]) * np.random.choice([1,2,3,4,5][:CURRENT_D])
 
 def proportions_from_state_unormalised(state):
     """Given a state, counts the number of spins of each kind. Returns a proportions vector of the form (#e1, #e2, ..., #-e1, ... #-eMAXD)."""
@@ -247,7 +252,7 @@ slider_ax = fig.add_subplot(1,2,2)
 plt.style.use('_mpl-gallery-nogrid')
 
 # make initial data
-state = [[unif_ising() for _ in range(GRID)] for _ in range(GRID)]
+state = [[unif_spin() for _ in range(GRID)] for _ in range(GRID)]
 state = np.array(state)
 
 # plot grid
@@ -259,6 +264,27 @@ grid = grid_ax.imshow(
     animated=True
     
 )
+
+# legend for the spins
+scalar_map = cm.ScalarMappable(norm=boundary_norm, cmap=cmap_simple)
+
+legend_elements = [
+    Rectangle([0,0],1,1,facecolor=scalar_map.to_rgba(1),lw=0),
+    Rectangle([0,0],1,1,facecolor=scalar_map.to_rgba(-1),lw=0),
+    Rectangle([0,0],1,1,facecolor=scalar_map.to_rgba(2),lw=0),
+    Rectangle([0,0],1,1,facecolor=scalar_map.to_rgba(-2),lw=0),
+    Rectangle([0,0],1,1,facecolor=scalar_map.to_rgba(3),lw=0),
+    Rectangle([0,0],1,1,facecolor=scalar_map.to_rgba(-3),lw=0),
+    Rectangle([0,0],1,1,facecolor=scalar_map.to_rgba(4),lw=0),
+    Rectangle([0,0],1,1,facecolor=scalar_map.to_rgba(-4),lw=0),
+    Rectangle([0,0],1,1,facecolor=scalar_map.to_rgba(5),lw=0),
+    Rectangle([0,0],1,1,facecolor=scalar_map.to_rgba(-5),lw=0),
+][:2*CURRENT_D]
+legend_labels = [
+    '$e_1$', '$-e_1$', '$e_2$', '$-e_2$', '$e_3$', '$-e_3$', '$e_4$', '$-e_4$', '$e_5$', '$-e_5$', 
+][:2*CURRENT_D]
+grid_ax.legend(legend_elements, legend_labels, loc='upper left')
+
 # I don't want ticks
 grid_ax.set_xticks([])
 grid_ax.set_yticks([])
@@ -276,11 +302,11 @@ def update_slider(val):
 freq_slider.on_changed(update_slider)
 
 def update(frame, *fargs):
-    # perform a Glauber update
-    v = select_vertex()
 
-    for _ in range(100):
-    
+    for _ in range(500):
+        # perform a Glauber update
+        v = select_vertex()
+
         if CURRENT_GRAPH == GraphGeometry.COMPLETE:
             new_spin = sample_new_spin_complete(
                 current_spin=state[v], 
