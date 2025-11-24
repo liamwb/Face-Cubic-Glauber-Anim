@@ -35,7 +35,7 @@ import time
 GRID = 256
 TOTAL_SPINS = GRID**2
 
-CURRENT_D = 3  # single source of truth 
+CURRENT_D = 1  # single source of truth 
 BETA = 1
 MAX_D = 5  # I'm not sure how insightful going much higher than 4 is, and I'm not sure I could display the spins in a visually sensible way
 MAX_BETA = 4*CURRENT_D  # how far the beta slider should go
@@ -267,7 +267,7 @@ grid = ax.imshow(
 # legend for the spins
 scalar_map = cm.ScalarMappable(norm=boundary_norm, cmap=cmap_simple)
 
-legend_elements = [
+def get_legend_elements(): return [
     Rectangle([0,0],1,1,facecolor=scalar_map.to_rgba(1),lw=0),
     Rectangle([0,0],1,1,facecolor=scalar_map.to_rgba(-1),lw=0),
     Rectangle([0,0],1,1,facecolor=scalar_map.to_rgba(2),lw=0),
@@ -279,10 +279,15 @@ legend_elements = [
     Rectangle([0,0],1,1,facecolor=scalar_map.to_rgba(5),lw=0),
     Rectangle([0,0],1,1,facecolor=scalar_map.to_rgba(-5),lw=0),
 ][:2*CURRENT_D]
-legend_labels = [
+def get_legend_labels(): return [
     '$e_1$', '$-e_1$', '$e_2$', '$-e_2$', '$e_3$', '$-e_3$', '$e_4$', '$-e_4$', '$e_5$', '$-e_5$', 
 ][:2*CURRENT_D]
-ax.legend(legend_elements, legend_labels, loc='upper left')
+legend_elements = get_legend_elements(); legend_labels = get_legend_labels();
+leg = fig.legend(
+    handles=legend_elements, 
+    labels=legend_labels, 
+    loc='upper right'
+)
 
 # I don't want ticks
 ax.set_xticks([])
@@ -302,7 +307,16 @@ beta_slider = Slider(
     valinit=0, 
     orientation='horizontal')
 
-# Create a slider for temperature (horizontal)
+# Update function for temperature
+def update_beta(val):
+    global BETA
+    BETA = val
+    fig.canvas.draw_idle()
+
+# Connect the temperature slider to the update function
+beta_slider.on_changed(update_beta)
+
+# Create a slider for dimension (vertical)
 d_ax = fig.add_axes([0.1,0.25,0.0225,0.63])
 d_slider = Slider(
     ax=d_ax, 
@@ -310,16 +324,30 @@ d_slider = Slider(
     valmin=1, 
     valmax=5, 
     valinit=1, 
-    orientation='vertical')
+    orientation='vertical',
+    valstep=1
+)
 
-# Update function for temperature
-def update_beta(val):
-    global BETA
-    BETA = val
+# Update function for dimension
+def update_d(val):
+    global CURRENT_D, leg
+    CURRENT_D = val
+
+    # update the legend
+    # this is a hack -- we make the old legend invisible and then de-reference it
+    # hopefully the old legend gets garbage collected...
+    leg.set(visible=False)
+    legend_elements = get_legend_elements(); legend_labels = get_legend_labels();
+    leg = fig.legend(
+        handles=legend_elements, 
+        labels=legend_labels, 
+        loc='upper right'
+    )
+
     fig.canvas.draw_idle()
-#
-# Connect the frequency slider to the update function
-beta_slider.on_changed(update_beta)
+
+# Connect the temperature slider to the update function
+d_slider.on_changed(update_d)
 
 def update(frame, *fargs):
 
