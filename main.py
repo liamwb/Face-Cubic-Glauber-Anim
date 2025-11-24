@@ -2,7 +2,7 @@ from enum import Enum
 import numpy as np
 from numpy import cosh, sinh, exp
 import matplotlib.pyplot as plt
-from matplotlib.widgets import Slider
+from matplotlib.widgets import Slider, TextBox, Button
 from matplotlib.colors import ListedColormap, BoundaryNorm
 from matplotlib.patches import Rectangle
 import matplotlib.animation as animation
@@ -32,7 +32,9 @@ import time
 ###################
 #    CONSTANTS    #
 ###################
-GRID = 256
+# For the simulation on the complete graph, 64x64 seems about right
+# For the simulation on the lattice graph, 64x64 seems about right
+GRID = 212
 TOTAL_SPINS = GRID**2
 
 CURRENT_D = 1  # single source of truth 
@@ -131,8 +133,7 @@ def get_prop_update(spin):
     if spin > 0:  # just need to count from zero
         res[spin-1] = 1
     else:  # start from MAX_D
-        res[MAX_D + (spin*-1)] = 1
-
+        res[MAX_D + (spin*-1) - 1] = 1
     return res
 
 def get_spin_vector(spin):
@@ -295,17 +296,18 @@ ax.set_yticks([])
 
 # adjust the main plot to make room for the sliders
 # fig.subplots_adjust(right=0.75, bottom=0.25)
-fig.tight_layout()
+# fig.tight_layout()
 
 # Create a slider for temperature (horizontal)
-beta_ax = fig.add_axes([0.25,0.1,0.65,0.03])
+beta_ax = fig.add_axes([0.04,0.04,0.21,0.03])
 beta_slider = Slider(
     ax=beta_ax, 
     label='$\\beta$', 
     valmin=0.0, 
     valmax=10.0, 
     valinit=0, 
-    orientation='horizontal')
+    orientation='horizontal',
+facecolor='black')
 
 # Update function for temperature
 def update_beta(val):
@@ -313,11 +315,16 @@ def update_beta(val):
     BETA = val
     fig.canvas.draw_idle()
 
+    # put the new value in beta_box
+    beta_box.set_val(round(val, 3))
+
 # Connect the temperature slider to the update function
 beta_slider.on_changed(update_beta)
+# don't show the valtext because we have a textbox for beta
+beta_slider.valtext.set_visible(False)
 
 # Create a slider for dimension (vertical)
-d_ax = fig.add_axes([0.1,0.25,0.0225,0.63])
+d_ax = fig.add_axes([0.03,0.25,0.0225,0.63])
 d_slider = Slider(
     ax=d_ax, 
     label='$d$', 
@@ -349,6 +356,53 @@ def update_d(val):
 # Connect the temperature slider to the update function
 d_slider.on_changed(update_d)
 
+# button to toggle GraphGeometry
+button_ax = fig.add_axes([0.375,0.9,0.25,0.07])
+button = Button(button_ax, "LATTICE")
+def toggle_geometry(event):
+    global CURRENT_GRAPH, button
+    if CURRENT_GRAPH == GraphGeometry.LATTICE:
+        button.label.set_text("COMPLETE GRAPH")
+        CURRENT_GRAPH = GraphGeometry.COMPLETE
+        GRID = 64
+    elif CURRENT_GRAPH == GraphGeometry.COMPLETE:
+        button.label.set_text("SQUARE LATTICE")
+        CURRENT_GRAPH = GraphGeometry.LATTICE
+        GRID = 212
+
+    # re-generate a uniform state
+    state = [[unif_spin() for _ in range(GRID)] for _ in range(GRID)]
+    state = np.array(state)
+
+    # re-plot the grid
+    grid = ax.imshow(
+        state, 
+        origin='lower', 
+        cmap=cmap_simple,
+        norm=boundary_norm,
+        animated=True
+        
+    )
+
+button.on_clicked(toggle_geometry)
+
+# entry fields for beta slider
+beta_box_ax = fig.add_axes([0.1,0.1,0.1,0.075])
+beta_box = TextBox(beta_box_ax, "$\\beta$")
+def submit_beta(expr):
+    global BETA
+    try:
+        val = float(expr)
+        BETA = val
+        beta_slider.set_val(val)
+    except:
+        beta_box.set_val("")
+
+beta_box.on_submit(submit_beta)
+beta_box.set_val(0)
+
+
+# main loop for the animation
 def update(frame, *fargs):
 
     for _ in range(500):
@@ -374,7 +428,7 @@ def update(frame, *fargs):
     # print(f"β =  {BETA},  d = {CURRENT_D}", end='\r')
     t2 = time.perf_counter()
 
-    print(f"Frametime: {(t2-t1)*1000}ms", end='\r')
+    print(f"β =  {BETA},  d = {CURRENT_D}, Frametime: {round((t2-t1)*1000, 3)}ms", end='\r')
 
     grid.set_data(state)
 
