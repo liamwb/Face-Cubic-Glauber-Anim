@@ -49,7 +49,7 @@ class GraphGeometry(Enum):
     COMPLETE = 1
     LATTICE = 2
 
-CURRENT_GRAPH = GraphGeometry.LATTICE
+CURRENT_GRAPH = GraphGeometry.COMPLETE
 
 ####################
 # HELPER FUNCTIONS #
@@ -262,7 +262,6 @@ grid = ax.imshow(
     cmap=cmap_simple,
     norm=boundary_norm,
     animated=True
-    
 )
 
 # legend for the spins
@@ -358,9 +357,9 @@ d_slider.on_changed(update_d)
 
 # button to toggle GraphGeometry
 button_ax = fig.add_axes([0.375,0.9,0.25,0.07])
-button = Button(button_ax, "LATTICE")
+button = Button(button_ax, "LATTICE") if CURRENT_GRAPH == GraphGeometry.LATTICE else Button(button_ax, "COMPLETE GRAPH")
 def toggle_geometry(event):
-    global CURRENT_GRAPH, button
+    global CURRENT_GRAPH, GRID, button, grid, state
     if CURRENT_GRAPH == GraphGeometry.LATTICE:
         button.label.set_text("COMPLETE GRAPH")
         CURRENT_GRAPH = GraphGeometry.COMPLETE
@@ -374,15 +373,16 @@ def toggle_geometry(event):
     state = [[unif_spin() for _ in range(GRID)] for _ in range(GRID)]
     state = np.array(state)
 
-    # re-plot the grid
+    # remove and replace grid
+    grid.remove()
     grid = ax.imshow(
         state, 
         origin='lower', 
         cmap=cmap_simple,
         norm=boundary_norm,
         animated=True
-        
     )
+
 
 button.on_clicked(toggle_geometry)
 
@@ -395,7 +395,7 @@ def submit_beta(expr):
         val = float(expr)
         BETA = val
         beta_slider.set_val(val)
-    except:
+    except:  # if there's some junk in the input
         beta_box.set_val("")
 
 beta_box.on_submit(submit_beta)
@@ -404,7 +404,6 @@ beta_box.set_val(0)
 
 # main loop for the animation
 def update(frame, *fargs):
-
     for _ in range(500):
         t1 = time.perf_counter()
         # perform a Glauber update
@@ -425,7 +424,6 @@ def update(frame, *fargs):
 
         state[v] = new_spin
 
-    # print(f"β =  {BETA},  d = {CURRENT_D}", end='\r')
     t2 = time.perf_counter()
 
     print(f"β =  {BETA},  d = {CURRENT_D}, Frametime: {round((t2-t1)*1000, 3)}ms", end='\r')
@@ -443,7 +441,7 @@ ani = animation.FuncAnimation(
     frames=None,
     interval=INTERVAL,
     cache_frame_data=False,  # I just want to show this animation in a window, not save it
-    blit=True  # this does not appear to do much
+    blit=True  
 )
 
 plt.show()
