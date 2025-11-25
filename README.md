@@ -19,7 +19,7 @@ Run the Python script `main.py` in your favourite way. There is a `shell.nix` if
 
 ## Authors
 
-[Liam Wood-Baker](liam.wood-baker1@monash.edu)
+[Liam Wood-Baker](mailto:liam.wood-baker1@monash.edu)
 
 ## Acknowledgments
 This project was inspired by a [simulation of the liquid-vapor model](https://vilas.us/simulations/liquidvapor/), which you can learn more about in the following excellent videos:
