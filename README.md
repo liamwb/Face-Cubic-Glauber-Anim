@@ -13,7 +13,7 @@ This project was made for use in talks to help explain the face-cubic Glauber pr
 * Python 3
 * Numpy, Matplotlib
 
-### Installing
+### Usage
 
 Run the Python script `main.py` in your favourite way. There is a `shell.nix` if you want to use `nix-shell` or `nix develop`, but you certainly don't have to.
 
