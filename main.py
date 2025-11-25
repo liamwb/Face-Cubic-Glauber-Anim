@@ -49,7 +49,7 @@ class GraphGeometry(Enum):
     COMPLETE = 1
     LATTICE = 2
 
-CURRENT_GRAPH = GraphGeometry.COMPLETE
+CURRENT_GRAPH = GraphGeometry.LATTICE
 
 ####################
 # HELPER FUNCTIONS #
@@ -359,7 +359,7 @@ d_slider.on_changed(update_d)
 button_ax = fig.add_axes([0.375,0.9,0.25,0.07])
 button = Button(button_ax, "LATTICE") if CURRENT_GRAPH == GraphGeometry.LATTICE else Button(button_ax, "COMPLETE GRAPH")
 def toggle_geometry(event):
-    global CURRENT_GRAPH, GRID, button, grid, state
+    global CURRENT_GRAPH, GRID, TOTAL_SPINS, button, grid, state
     if CURRENT_GRAPH == GraphGeometry.LATTICE:
         button.label.set_text("COMPLETE GRAPH")
         CURRENT_GRAPH = GraphGeometry.COMPLETE
@@ -368,6 +368,9 @@ def toggle_geometry(event):
         button.label.set_text("SQUARE LATTICE")
         CURRENT_GRAPH = GraphGeometry.LATTICE
         GRID = 212
+
+    # re-compute normalising constant
+    TOTAL_SPINS = GRID**2
 
     # re-generate a uniform state
     state = [[unif_spin() for _ in range(GRID)] for _ in range(GRID)]
