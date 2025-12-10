@@ -286,7 +286,8 @@ legend_elements = get_legend_elements(); legend_labels = get_legend_labels();
 leg = fig.legend(
     handles=legend_elements, 
     labels=legend_labels, 
-    loc='upper right'
+    loc='upper right',
+    fontsize='x-large'
 )
 
 # I don't want ticks
