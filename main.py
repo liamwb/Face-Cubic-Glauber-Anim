@@ -9,6 +9,8 @@ import matplotlib.animation as animation
 import matplotlib.cm as cm
 
 import time
+import argparse
+import os
 
 #  THE VISION:
 #
@@ -239,213 +241,274 @@ def sample_new_spin_lattice(vertex, state, d):
         list(range(2*MAX_D))
     )
     res = min(list(below))
-
     return get_spin(res)
 
-###################
-#      PLOTS      #
-###################
 
-# Create a figure, axes
-fig, ax = plt.subplots()
+def save_png_sequence(output_dir, num_frames=300, d_init=1, beta_init=1.0, geometry='lattice',
+                       updates_per_frame=500):
+    """Save a PNG sequence of just the grid (no UI elements) to the specified directory."""
+    global CURRENT_D, BETA, CURRENT_GRAPH, GRID, TOTAL_SPINS, state
 
-plt.style.use('_mpl-gallery-nogrid')
-
-# make initial data
-state = [[unif_spin() for _ in range(GRID)] for _ in range(GRID)]
-state = np.array(state)
-
-# plot grid
-grid = ax.imshow(
-    state, 
-    origin='lower', 
-    cmap=cmap_simple,
-    norm=boundary_norm,
-    animated=True
-)
-
-# legend for the spins
-scalar_map = cm.ScalarMappable(norm=boundary_norm, cmap=cmap_simple)
-
-def get_legend_elements(): return [
-    Rectangle([0,0],1,1,facecolor=scalar_map.to_rgba(1),lw=0),
-    Rectangle([0,0],1,1,facecolor=scalar_map.to_rgba(-1),lw=0),
-    Rectangle([0,0],1,1,facecolor=scalar_map.to_rgba(2),lw=0),
-    Rectangle([0,0],1,1,facecolor=scalar_map.to_rgba(-2),lw=0),
-    Rectangle([0,0],1,1,facecolor=scalar_map.to_rgba(3),lw=0),
-    Rectangle([0,0],1,1,facecolor=scalar_map.to_rgba(-3),lw=0),
-    Rectangle([0,0],1,1,facecolor=scalar_map.to_rgba(4),lw=0),
-    Rectangle([0,0],1,1,facecolor=scalar_map.to_rgba(-4),lw=0),
-    Rectangle([0,0],1,1,facecolor=scalar_map.to_rgba(5),lw=0),
-    Rectangle([0,0],1,1,facecolor=scalar_map.to_rgba(-5),lw=0),
-][:2*CURRENT_D]
-def get_legend_labels(): return [
-    '$e_1$', '$-e_1$', '$e_2$', '$-e_2$', '$e_3$', '$-e_3$', '$e_4$', '$-e_4$', '$e_5$', '$-e_5$', 
-][:2*CURRENT_D]
-legend_elements = get_legend_elements(); legend_labels = get_legend_labels();
-leg = fig.legend(
-    handles=legend_elements, 
-    labels=legend_labels, 
-    loc='upper right',
-    fontsize='x-large'
-)
-
-# I don't want ticks
-ax.set_xticks([])
-ax.set_yticks([])
-
-# adjust the main plot to make room for the sliders
-# fig.subplots_adjust(right=0.75, bottom=0.25)
-# fig.tight_layout()
-
-# Create a slider for temperature (horizontal)
-beta_ax = fig.add_axes([0.04,0.04,0.21,0.03])
-beta_slider = Slider(
-    ax=beta_ax, 
-    label='$\\beta$', 
-    valmin=0.0, 
-    valmax=10.0, 
-    valinit=0, 
-    orientation='horizontal',
-facecolor='black')
-
-# Update function for temperature
-def update_beta(val):
-    global BETA
-    BETA = val
-    fig.canvas.draw_idle()
-
-    # put the new value in beta_box
-    beta_box.set_val(round(val, 3))
-
-# Connect the temperature slider to the update function
-beta_slider.on_changed(update_beta)
-# don't show the valtext because we have a textbox for beta
-beta_slider.valtext.set_visible(False)
-
-# Create a slider for dimension (vertical)
-d_ax = fig.add_axes([0.03,0.25,0.0225,0.63])
-d_slider = Slider(
-    ax=d_ax, 
-    label='$d$', 
-    valmin=1, 
-    valmax=5, 
-    valinit=1, 
-    orientation='vertical',
-    valstep=1
-)
-
-# Update function for dimension
-def update_d(val):
-    global CURRENT_D, leg
-    CURRENT_D = val
-
-    # update the legend
-    # this is a hack -- we make the old legend invisible and then de-reference it
-    # hopefully the old legend gets garbage collected...
-    leg.set(visible=False)
-    legend_elements = get_legend_elements(); legend_labels = get_legend_labels();
-    leg = fig.legend(
-        handles=legend_elements, 
-        labels=legend_labels, 
-        loc='upper right'
-    )
-
-    fig.canvas.draw_idle()
-
-# Connect the temperature slider to the update function
-d_slider.on_changed(update_d)
-
-# button to toggle GraphGeometry
-button_ax = fig.add_axes([0.375,0.9,0.25,0.07])
-button = Button(button_ax, "LATTICE") if CURRENT_GRAPH == GraphGeometry.LATTICE else Button(button_ax, "COMPLETE GRAPH")
-def toggle_geometry(event):
-    global CURRENT_GRAPH, GRID, TOTAL_SPINS, button, grid, state
-    if CURRENT_GRAPH == GraphGeometry.LATTICE:
-        button.label.set_text("COMPLETE GRAPH")
-        CURRENT_GRAPH = GraphGeometry.COMPLETE
-        GRID = 64
-    elif CURRENT_GRAPH == GraphGeometry.COMPLETE:
-        button.label.set_text("SQUARE LATTICE")
-        CURRENT_GRAPH = GraphGeometry.LATTICE
-        GRID = 212
-
-    # re-compute normalising constant
+    CURRENT_D = d_init
+    BETA = beta_init
+    geometry_map = {'lattice': GraphGeometry.LATTICE, 'complete': GraphGeometry.COMPLETE}
+    CURRENT_GRAPH = geometry_map[geometry]
+    GRID = 212 if CURRENT_GRAPH == GraphGeometry.LATTICE else 64
     TOTAL_SPINS = GRID**2
 
-    # re-generate a uniform state
-    state = [[unif_spin() for _ in range(GRID)] for _ in range(GRID)]
-    state = np.array(state)
+    state = np.array([[unif_spin() for _ in range(GRID)] for _ in range(GRID)])
 
-    # remove and replace grid
-    grid.remove()
-    grid = ax.imshow(
-        state, 
-        origin='lower', 
-        cmap=cmap_simple,
-        norm=boundary_norm,
-        animated=True
-    )
+    fig_save, ax_save = plt.subplots()
+    ax_save.axis('off')
+    fig_save.subplots_adjust(0, 0, 1, 1)
+
+    grid_save = ax_save.imshow(state, origin='lower', cmap=cmap_simple, norm=boundary_norm)
+
+    os.makedirs(output_dir, exist_ok=True)
+
+    for frame in range(num_frames):
+        for _ in range(updates_per_frame):
+            v = select_vertex()
+            if CURRENT_GRAPH == GraphGeometry.COMPLETE:
+                new_spin = sample_new_spin_complete(
+                    current_spin=state[v],
+                    current_prop=proportions_from_state_unormalised(state),
+                    d=CURRENT_D
+                )
+            else:
+                new_spin = sample_new_spin_lattice(
+                    vertex=v,
+                    state=state,
+                    d=CURRENT_D
+                )
+            state[v] = new_spin
+
+        grid_save.set_data(state)
+        fig_save.savefig(os.path.join(output_dir, 'frame_{:04d}.png'.format(frame)),
+                         bbox_inches='tight', pad_inches=0)
+        print('Saved frame {}/{}'.format(frame + 1, num_frames), end='\r')
+
+    plt.close(fig_save)
+    print('\nDone! {} frames saved to {}/'.format(num_frames, output_dir))
 
 
-button.on_clicked(toggle_geometry)
+if __name__ == '__main__':
+    parser = argparse.ArgumentParser(description='Interactive Glauber dynamics simulation')
+    parser.add_argument('--save', type=str, default=None, help='Directory to save PNG sequence to')
+    parser.add_argument('--frames', type=int, default=300, help='Number of frames to save')
+    parser.add_argument('--d', type=int, default=1, help='Spin dimension (1-5)')
+    parser.add_argument('--beta', type=float, default=1.0, help='Inverse temperature')
+    parser.add_argument('--geometry', type=str, default='lattice', choices=['lattice', 'complete'],
+                        help='Graph geometry')
+    parser.add_argument('--updates-per-frame', type=int, default=500,
+                        help='Glauber updates per animation frame')
+    args = parser.parse_args()
 
-# entry fields for beta slider
-beta_box_ax = fig.add_axes([0.1,0.1,0.1,0.075])
-beta_box = TextBox(beta_box_ax, "$\\beta$")
-def submit_beta(expr):
-    global BETA
-    try:
-        val = float(expr)
-        BETA = val
-        beta_slider.set_val(val)
-    except:  # if there's some junk in the input
-        beta_box.set_val("")
+    if args.save:
+        save_png_sequence(args.save, args.frames, args.d, args.beta, args.geometry,
+                          args.updates_per_frame)
+    else:
 
-beta_box.on_submit(submit_beta)
-beta_box.set_val(0)
+        # Create a figure, axes
+        fig, ax = plt.subplots()
 
+        plt.style.use('_mpl-gallery-nogrid')
 
-# main loop for the animation
-def update(frame, *fargs):
-    for _ in range(500):
-        t1 = time.perf_counter()
-        # perform a Glauber update
-        v = select_vertex()
+        # make initial data
+        state = [[unif_spin() for _ in range(GRID)] for _ in range(GRID)]
+        state = np.array(state)
 
-        if CURRENT_GRAPH == GraphGeometry.COMPLETE:
-            new_spin = sample_new_spin_complete(
-                current_spin=state[v], 
-                current_prop=proportions_from_state_unormalised(state), 
-                d=CURRENT_D
-            ) 
-        elif CURRENT_GRAPH == GraphGeometry.LATTICE:
-            new_spin = sample_new_spin_lattice(
-                vertex=v, 
-                state=state, 
-                d=CURRENT_D
+        # plot grid
+        grid = ax.imshow(
+            state, 
+            origin='lower', 
+            cmap=cmap_simple,
+            norm=boundary_norm,
+            animated=True
+        )
+
+        # legend for the spins
+        scalar_map = cm.ScalarMappable(norm=boundary_norm, cmap=cmap_simple)
+
+        def get_legend_elements(): return [
+            Rectangle([0,0],1,1,facecolor=scalar_map.to_rgba(1),lw=0),
+            Rectangle([0,0],1,1,facecolor=scalar_map.to_rgba(-1),lw=0),
+            Rectangle([0,0],1,1,facecolor=scalar_map.to_rgba(2),lw=0),
+            Rectangle([0,0],1,1,facecolor=scalar_map.to_rgba(-2),lw=0),
+            Rectangle([0,0],1,1,facecolor=scalar_map.to_rgba(3),lw=0),
+            Rectangle([0,0],1,1,facecolor=scalar_map.to_rgba(-3),lw=0),
+            Rectangle([0,0],1,1,facecolor=scalar_map.to_rgba(4),lw=0),
+            Rectangle([0,0],1,1,facecolor=scalar_map.to_rgba(-4),lw=0),
+            Rectangle([0,0],1,1,facecolor=scalar_map.to_rgba(5),lw=0),
+            Rectangle([0,0],1,1,facecolor=scalar_map.to_rgba(-5),lw=0),
+        ][:2*CURRENT_D]
+        def get_legend_labels(): return [
+            '$e_1$', '$-e_1$', '$e_2$', '$-e_2$', '$e_3$', '$-e_3$', '$e_4$', '$-e_4$', '$e_5$', '$-e_5$', 
+        ][:2*CURRENT_D]
+        legend_elements = get_legend_elements(); legend_labels = get_legend_labels();
+        leg = fig.legend(
+            handles=legend_elements, 
+            labels=legend_labels, 
+            loc='upper right',
+            fontsize='x-large'
+        )
+
+        # I don't want ticks
+        ax.set_xticks([])
+        ax.set_yticks([])
+
+        # adjust the main plot to make room for the sliders
+        # fig.subplots_adjust(right=0.75, bottom=0.25)
+        # fig.tight_layout()
+
+        # Create a slider for temperature (horizontal)
+        beta_ax = fig.add_axes([0.04,0.04,0.21,0.03])
+        beta_slider = Slider(
+            ax=beta_ax, 
+            label='$\\beta$', 
+            valmin=0.0, 
+            valmax=10.0, 
+            valinit=0, 
+            orientation='horizontal',
+        facecolor='black')
+
+        # Update function for temperature
+        def update_beta(val):
+            global BETA
+            BETA = val
+            fig.canvas.draw_idle()
+
+            # put the new value in beta_box
+            beta_box.set_val(round(val, 3))
+
+        # Connect the temperature slider to the update function
+        beta_slider.on_changed(update_beta)
+        # don't show the valtext because we have a textbox for beta
+        beta_slider.valtext.set_visible(False)
+
+        # Create a slider for dimension (vertical)
+        d_ax = fig.add_axes([0.03,0.25,0.0225,0.63])
+        d_slider = Slider(
+            ax=d_ax, 
+            label='$d$', 
+            valmin=1, 
+            valmax=5, 
+            valinit=1, 
+            orientation='vertical',
+            valstep=1
+        )
+
+        # Update function for dimension
+        def update_d(val):
+            global CURRENT_D, leg
+            CURRENT_D = val
+
+            # update the legend
+            # this is a hack -- we make the old legend invisible and then de-reference it
+            # hopefully the old legend gets garbage collected...
+            leg.set(visible=False)
+            legend_elements = get_legend_elements(); legend_labels = get_legend_labels();
+            leg = fig.legend(
+                handles=legend_elements, 
+                labels=legend_labels, 
+                loc='upper right'
             )
 
-        state[v] = new_spin
+            fig.canvas.draw_idle()
 
-    t2 = time.perf_counter()
+        # Connect the temperature slider to the update function
+        d_slider.on_changed(update_d)
 
-    print(f"β =  {BETA},  d = {CURRENT_D}, Frametime: {round((t2-t1)*1000, 3)}ms", end='\r')
+        # button to toggle GraphGeometry
+        button_ax = fig.add_axes([0.375,0.9,0.25,0.07])
+        button = Button(button_ax, "LATTICE") if CURRENT_GRAPH == GraphGeometry.LATTICE else Button(button_ax, "COMPLETE GRAPH")
+        def toggle_geometry(event):
+            global CURRENT_GRAPH, GRID, TOTAL_SPINS, button, grid, state
+            if CURRENT_GRAPH == GraphGeometry.LATTICE:
+                button.label.set_text("COMPLETE GRAPH")
+                CURRENT_GRAPH = GraphGeometry.COMPLETE
+                GRID = 64
+            elif CURRENT_GRAPH == GraphGeometry.COMPLETE:
+                button.label.set_text("SQUARE LATTICE")
+                CURRENT_GRAPH = GraphGeometry.LATTICE
+                GRID = 212
 
-    grid.set_data(state)
+            # re-compute normalising constant
+            TOTAL_SPINS = GRID**2
 
-    # if frame >= 5:
-    #     exit()
+            # re-generate a uniform state
+            state = [[unif_spin() for _ in range(GRID)] for _ in range(GRID)]
+            state = np.array(state)
 
-    return fargs  # pass the artists back for blitting
+            # remove and replace grid
+            grid.remove()
+            grid = ax.imshow(
+                state, 
+                origin='lower', 
+                cmap=cmap_simple,
+                norm=boundary_norm,
+                animated=True
+            )
 
-ani = animation.FuncAnimation(
-    fig, 
-    update, 
-    frames=None,
-    interval=INTERVAL,
-    cache_frame_data=False,  # I just want to show this animation in a window, not save it
-    blit=True  
-)
 
-plt.show()
+        button.on_clicked(toggle_geometry)
+
+        # entry fields for beta slider
+        beta_box_ax = fig.add_axes([0.1,0.1,0.1,0.075])
+        beta_box = TextBox(beta_box_ax, "$\\beta$")
+        def submit_beta(expr):
+            global BETA
+            try:
+                val = float(expr)
+                BETA = val
+                beta_slider.set_val(val)
+            except:  # if there's some junk in the input
+                beta_box.set_val("")
+
+        beta_box.on_submit(submit_beta)
+        beta_box.set_val(0)
+
+
+        # main loop for the animation
+        def update(frame, *fargs):
+            for _ in range(args.updates_per_frame):
+                t1 = time.perf_counter()
+                # perform a Glauber update
+                v = select_vertex()
+
+                if CURRENT_GRAPH == GraphGeometry.COMPLETE:
+                    new_spin = sample_new_spin_complete(
+                        current_spin=state[v], 
+                        current_prop=proportions_from_state_unormalised(state), 
+                        d=CURRENT_D
+                    ) 
+                elif CURRENT_GRAPH == GraphGeometry.LATTICE:
+                    new_spin = sample_new_spin_lattice(
+                        vertex=v, 
+                        state=state, 
+                        d=CURRENT_D
+                    )
+
+                state[v] = new_spin
+
+            t2 = time.perf_counter()
+
+            print(f"β =  {BETA},  d = {CURRENT_D}, Frametime: {round((t2-t1)*1000, 3)}ms", end='\r')
+
+            grid.set_data(state)
+
+            # if frame >= 5:
+            #     exit()
+
+            return fargs  # pass the artists back for blitting
+
+        ani = animation.FuncAnimation(
+            fig, 
+            update, 
+            frames=None,
+            interval=INTERVAL,
+            cache_frame_data=False,  # I just want to show this animation in a window, not save it
+            blit=True  
+        )
+
+        plt.show()
