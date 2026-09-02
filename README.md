@@ -1,10 +1,10 @@
-# Face-Cubic-Glauber-Anim
+# Interactive Glauber Dynamics Simulation
 
-This repository implements a visual simulation of the face-cubic Glauber process, on the complete graph and the square lattice.
+This repository implements a visual simulation of the Glauber process for the face-cubic model and the Blume-Emery-Griffiths model, on the complete graph and the square lattice.
 
 ## Description
 
-This project was made for use in talks to help explain the face-cubic Glauber process. It allows the user to play with both of the parameters of the model ($d$ and $\beta$), and see the effect that changing these parameters has on the behaviour of the model.
+This project was made for use in talks to help explain the face-cubic Glauber process. It allows the user to play with both of the parameters of the model ($d$ and $\beta$), and see the effect that changing these parameters has on the behaviour of the model. The BEG section was added later, but has the same structure.
 
 ## Getting Started
 
@@ -15,7 +15,7 @@ This project was made for use in talks to help explain the face-cubic Glauber pr
 
 ### Usage
 
-Run the Python script `main.py` in your favourite way. There is a `shell.nix` if you want to use `nix-shell` or `nix develop`, but you certainly don't have to.
+Run the Python script `main.py` in your favourite way. There is a `shell.nix` if you want to use `nix-shell` or `nix develop`, but you certainly don't have to. Each directory contains a `.py` file corresponding to a model.
 
 ## Authors
 
