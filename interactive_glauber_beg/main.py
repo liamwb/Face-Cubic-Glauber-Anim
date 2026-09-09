@@ -8,9 +8,13 @@ from matplotlib.patches import Rectangle
 import matplotlib.animation as animation
 import matplotlib.cm as cm
 
+from PIL import Image
+
 import time
 import argparse
 import os
+
+from numba import njit
 
 #  THE VISION:
 #
@@ -36,7 +40,10 @@ import os
 ###################
 # For the simulation on the complete graph, 64x64 seems about right
 # For the simulation on the lattice graph, 64x64 seems about right
-GRID = 212
+LATTICE_GRID=212
+COMPLETE_GRID=64
+
+GRID = LATTICE_GRID
 TOTAL_SPINS = GRID**2
 
 K = 1  # single source of truth 
@@ -86,10 +93,12 @@ def proportions_from_state_unormalised(state):
     return np.array(prop) 
     # Note that the simulation could be made more efficient by keeping track of the proportions vector with each update, instead of counting everything each step.
 
+@njit
 def magnetisation_from_propotion(proportion):
     return proportion[2]-proportion[0]
 
 
+@njit
 def get_prop_update(spin):
     """
     Given a spin, generates a vector with a 1 in the corresponding position. Intended use is to update proportions
@@ -101,9 +110,10 @@ def get_prop_update(spin):
 ##############
 # SIMULATION #
 ##############
-def select_vertex():
+@njit
+def select_vertex(grid):
     """Select uniformly at random a single vertex. Returns a tuple containing the coordinates of the vertex"""
-    return (np.random.choice(range(GRID)), np.random.choice(range(GRID)))
+    return (np.random.randint(0,grid), np.random.randint(0,grid))
 
 def p(s, adj_mag):
     """Returns the probability of updating to spin s given adjacent magnetisation adj_mag"""
@@ -119,42 +129,64 @@ def p(s, adj_mag):
 
     return numerator / denominator
 
-def sample_new_spin_complete(current_spin, current_prop):
+@njit
+def p_num(s, adj_mag, beta, k, total_spins):
+    """
+    Returns the numerator of p(s, adj_mag).
+    s should be one of -1, 0, 1
+    """
+    if s == -1:
+        return exp(-2*beta*k*adj_mag)
+    elif s == 1:
+        return exp(2*beta*k*adj_mag)
+    else:
+        return exp(beta - beta * k / total_spins)
+
+@njit
+def p_denom(adj_mag, beta, k, total_spins):
+    """
+    Returns the denominator of p(s, adj_mag).
+    """
+    return exp(2*beta*k*adj_mag) + exp(-2*beta*k*adj_mag) + exp(beta - beta * k / total_spins)
+
+@njit
+def sample_new_spin_complete(current_spin, current_prop, beta, k, total_spins):
 
     # remove the current spin from the magnetisation
     adj_prop = current_prop - get_prop_update(current_spin) 
-    adj_mag = magnetisation_from_propotion(adj_prop) / TOTAL_SPINS
+    adj_mag = magnetisation_from_propotion(adj_prop) / total_spins
 
     # compute the transition probabilities
-    conditional_measure = [p(s, adj_mag) for s in [-1,0,1]]
-    
-    # choose a new spin according to our conditional measure
-    cdf = [0 for _ in conditional_measure]
-    cdf[0] = conditional_measure[0]
-    for i in range(1, len(cdf)):
-        cdf[i] = cdf[i-1] + conditional_measure[i]
+    denominator = p_denom(adj_mag, beta, k, total_spins)
+    conditional_measure = [p_num(s, adj_mag, beta, k, total_spins)/denominator for s in [-1,0,1]]
+
+    # construct cdf
+    cdf = np.cumsum(np.array(conditional_measure))
 
     # sample via unif(0,1) noise
     unif = np.random.uniform(0,1)
     # choose the largest index where the cdf is still bigger than the noise
-    below = filter( 
-        lambda i : unif <= cdf[i],
-        list(range(3))
-    )
-    
-    return list(below)[0]-1
+    res=2  # If due to some fp weirdness unif > cdf[i], set to the last spin (+1)
+    for i in range(3):
+        if unif <= cdf[i]:
+            res=i
+            break
 
-def sample_new_spin_lattice(vertex, state):
-    """
-    Sample a new spin according to the conditional face-cubic measure on the square lattice. Does periodic boundary conditions by treating opposite edges as adjacent.
+    return res - 1
 
-    vertex is a tuple containing the coordinates of the vertex to be updated
+@njit
+def sample_new_spin_lattice(i, j, state, beta, k, total_spins):
     """
-    # compute adjacent magnetisation  (% ==> periodic)
-    left_i = ((vertex[0] - 1) % GRID, vertex[1] % GRID) 
-    right_i = ((vertex[0] + 1) % GRID, vertex[1] % GRID) 
-    top_i = (vertex[0]  % GRID, (vertex[1] + 1) % GRID) 
-    bottom_i = (vertex[0]  % GRID, (vertex[1] - 1) % GRID) 
+    Sample a new spin according to the conditional measure on the square lattice. Does periodic boundary conditions by treating opposite edges as adjacent.
+
+    i and j are the coordinates of the vertex to be updated
+    """
+    grid = state.shape[0]
+    # compute adjacent magnetisation  (% ==> periodic boundary conditions)
+    left_i = ((i - 1) % grid, j % grid) 
+    right_i = ((i + 1) % grid, j % grid) 
+    top_i = (i  % grid, (j + 1) % grid) 
+    bottom_i = (i  % grid, (j - 1) % grid) 
 
     left = state[left_i]
     right = state[right_i]
@@ -164,23 +196,22 @@ def sample_new_spin_lattice(vertex, state):
     adj_mag = left + right + top + bottom 
 
     # compute transition probabilities
-    # only compute spins that we are currently using
-    conditional_measure = [p(s, adj_mag) for s in [-1,0,1]]
+    denominator = p_denom(adj_mag, beta, k, total_spins)
+    conditional_measure = [p_num(s, adj_mag, beta, k, total_spins)/denominator for s in [-1,0,1]]
 
     # construct cdf
-    cdf = [0 for _ in conditional_measure]
-    cdf[0] = conditional_measure[0]
-    for i in range(1, len(cdf)):
-        cdf[i] = cdf[i-1] + conditional_measure[i]
+    cdf = np.cumsum(np.array(conditional_measure))
 
     # sample via unif(0,1) noise
     unif = np.random.uniform(0,1)
     # choose the largest index where the cdf is still bigger than the noise
-    below = filter( 
-        lambda i : unif <= cdf[i],
-        list(range(3))
-    )
-    return list(below)[0]-1
+    res=2  # If due to some fp weirdness unif > cdf[i], set to the last spin (+1)
+    for i in range(3):
+        if unif <= cdf[i]:
+            res=i
+            break
+
+    return res - 1
 
 
 def save_png_sequence(output_dir, num_frames=300, k=1, beta_init=1.0, geometry='lattice',
@@ -192,40 +223,41 @@ def save_png_sequence(output_dir, num_frames=300, k=1, beta_init=1.0, geometry='
     BETA = beta_init
     geometry_map = {'lattice': GraphGeometry.LATTICE, 'complete': GraphGeometry.COMPLETE}
     CURRENT_GRAPH = geometry_map[geometry]
-    GRID = 212 if CURRENT_GRAPH == GraphGeometry.LATTICE else 64
+    GRID = LATTICE_GRID if CURRENT_GRAPH == GraphGeometry.LATTICE else COMPLETE_GRID
     TOTAL_SPINS = GRID**2
 
     state = np.array([[unif_spin() for _ in range(GRID)] for _ in range(GRID)])
-
-    fig_save, ax_save = plt.subplots()
-    ax_save.axis('off')
-    fig_save.subplots_adjust(0, 0, 1, 1)
-
-    grid_save = ax_save.imshow(state, origin='lower', cmap=cmap_simple, norm=boundary_norm)
 
     os.makedirs(output_dir, exist_ok=True)
 
     for frame in range(num_frames):
         for _ in range(updates_per_frame):
-            v = select_vertex()
+            v = select_vertex(grid=GRID)
             if CURRENT_GRAPH == GraphGeometry.COMPLETE:
                 new_spin = sample_new_spin_complete(
                     current_spin=state[v],
                     current_prop=proportions_from_state_unormalised(state),
+                    beta=BETA,
+                    k=K,
+                    total_spins=TOTAL_SPINS
                 )
             else:
                 new_spin = sample_new_spin_lattice(
-                    vertex=v,
+                    i=v[0],
+                    j=v[1],
                     state=state,
+                    beta=BETA,
+                    k=K,
+                    total_spins=TOTAL_SPINS
                 )
             state[v] = new_spin
 
-        grid_save.set_data(state)
-        fig_save.savefig(os.path.join(output_dir, 'frame_{:04d}.png'.format(frame)),
-                         bbox_inches='tight', pad_inches=0)
+        rgba = cmap_simple(boundary_norm(state))          # (GRID, GRID, 4), floats 0..1
+        img = Image.fromarray((rgba * 255).astype(np.uint8), 'RGBA')
+        img.save(os.path.join(output_dir, f'frame_{frame:04d}.png'))
+
         print('Saved frame {}/{}'.format(frame + 1, num_frames), end='\r')
 
-    plt.close(fig_save)
     print('\nDone! {} frames saved to {}/'.format(num_frames, output_dir))
 
 
@@ -242,7 +274,7 @@ if __name__ == '__main__':
     args = parser.parse_args()
 
     if args.save:
-        save_png_sequence(args.save, args.frames, args.d, args.beta, args.geometry,
+        save_png_sequence(args.save, args.frames, args.K, args.beta, args.geometry,
                           args.updates_per_frame)
     else:
 
@@ -356,11 +388,11 @@ if __name__ == '__main__':
             if CURRENT_GRAPH == GraphGeometry.LATTICE:
                 button.label.set_text("COMPLETE GRAPH")
                 CURRENT_GRAPH = GraphGeometry.COMPLETE
-                GRID = 96
+                GRID = COMPLETE_GRID
             elif CURRENT_GRAPH == GraphGeometry.COMPLETE:
                 button.label.set_text("SQUARE LATTICE")
                 CURRENT_GRAPH = GraphGeometry.LATTICE
-                GRID = 212
+                GRID = LATTICE_GRID
 
             # re-compute normalising constant
             TOTAL_SPINS = GRID**2
@@ -403,24 +435,31 @@ if __name__ == '__main__':
             for _ in range(args.updates_per_frame):
                 t1 = time.perf_counter()
                 # perform a Glauber update
-                v = select_vertex()
+                v = select_vertex(grid=GRID)
 
                 if CURRENT_GRAPH == GraphGeometry.COMPLETE:
                     new_spin = sample_new_spin_complete(
                         current_spin=state[v], 
                         current_prop=proportions_from_state_unormalised(state), 
+                        beta=BETA,
+                        k=K,
+                        total_spins=TOTAL_SPINS
                     ) 
                 elif CURRENT_GRAPH == GraphGeometry.LATTICE:
                     new_spin = sample_new_spin_lattice(
-                        vertex=v, 
+                        i=v[0], 
+                        j=v[1], 
                         state=state, 
+                        beta=BETA,
+                        k=K,
+                        total_spins=TOTAL_SPINS
                     )
 
                 state[v] = new_spin
 
             t2 = time.perf_counter()
 
-            print(f"β =  {BETA},  K = {K}, Frametime: {round((t2-t1)*1000, 3)}ms, S_t = {proportions_from_state_unormalised(state)}", end='            \r')
+            print(f"β =  {BETA},  K = {K}, Frametime: {round((t2-t1)*1000, 3)}ms, S_t = {np.round(proportions_from_state_unormalised(state)/TOTAL_SPINS, decimals=2)}", end='            \r')
 
             grid.set_data(state)
 

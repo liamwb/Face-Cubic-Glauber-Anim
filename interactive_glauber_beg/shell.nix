@@ -21,6 +21,10 @@ pkgs.mkShellNoCC {
     python3Packages.matplotlib
     python3Packages.debugpy
     python3Packages.snakeviz # profiler visualisation
+
+    python3Packages.numba
+    python3Packages.setuptools
+    python3Packages.llvmlite
   ];
   shellHook = ''
     # export "LD_LIBRARY_PATH=$LD_LIBRARY_PATH:${libraryPath}"
