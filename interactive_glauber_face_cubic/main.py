@@ -40,7 +40,7 @@ from numba import njit
 ###################
 # For the simulation on the complete graph, 64x64 seems about right
 # For the simulation on the lattice graph, 64x64 seems about right
-LATTICE_GRID=1080
+LATTICE_GRID=400
 COMPLETE_GRID=128
 
 GRID = LATTICE_GRID
@@ -68,9 +68,11 @@ colors_simple = [
     '#E58EC2',  # -4: Soft pink
     '#9F8EE5',  # -3: Soft lavender
     '#8EB1E5',  # -2: Soft periwinkle
-    '#8EE5E5',  # -1: Soft cyan
-    '#FFFFFF',  #  0: Black (unused)
-    '#E58E8E',  #  1: Soft rose
+    '#FFFFFF',
+    # '#8EE5E5',  # -1: Soft cyan
+    '#FFF000',  #  0: Black (unused)
+    # '#E58E8E',  #  1: Soft rose
+    '#000000',
     '#E5C28E',  #  2: Soft peach
     '#D4E58E',  #  3: Soft lime
     '#8EE5B1',  #  4: Soft mint
@@ -335,7 +337,14 @@ if __name__ == '__main__':
                         help='Graph geometry')
     parser.add_argument('--updates-per-frame', type=int, default=500,
                         help='Glauber updates per animation frame')
+    parser.add_argument('--grid', type=int, default=400, help='Size of the square lattice')
+    parser.add_argument('--complete', type=int, default=120, help='Size of the complete graph')
     args = parser.parse_args()
+
+    LATTICE_GRID= args.grid
+    COMPLETE_GRID= args.complete
+    GRID=LATTICE_GRID
+    TOTAL_SPINS = GRID**2
 
     if args.save:
         save_png_sequence(args.save, args.frames, args.d, args.beta, args.geometry,
@@ -357,7 +366,8 @@ if __name__ == '__main__':
             origin='lower', 
             cmap=cmap_simple,
             norm=boundary_norm,
-            animated=True
+            animated=True,
+            interpolation = "none"
         )
 
         # legend for the spins
@@ -480,7 +490,8 @@ if __name__ == '__main__':
                 origin='lower', 
                 cmap=cmap_simple,
                 norm=boundary_norm,
-                animated=True
+                animated=True,
+                interpolation = "none"
             )
 
 
